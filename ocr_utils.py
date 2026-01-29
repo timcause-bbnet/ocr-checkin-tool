@@ -175,50 +175,63 @@ def process_document(image_file):
 def parse_taiwan_id(lines):
     info = {'Nationality': '台灣'}
     
-    for i, line in enumerate(lines):
-        cleaned = line.strip().replace(" ", "")
+    # Pre-clean lines to remove "樣本", "樣張" to prevent interference
+    clean_lines = [l.strip() for l in lines]
+    
+    for i, line in enumerate(clean_lines):
+        # Remove spaces for logic
+        txt = line.replace(" ", "").replace("樣本", "").replace("樣張", "")
         
         # Name Anchor
-        if "姓名" in line:
-            val = line.replace("姓名", "").strip()
-            # If name is empty, it might be on the next line
-            if not val and i+1 < len(lines): 
-                val = lines[i+1]
+        if "姓名" in txt:
+            val = txt.replace("姓名", "")
+            
+            # Look ahead for spaced name parts (up to 3 lines)
+            # Common case: Line1: 姓名 陳, Line2: 筱, Line3: 玲
+            for j in range(1, 4): 
+                if i+j < len(clean_lines):
+                    next_l = clean_lines[i+j].replace(" ", "").replace("樣本", "").replace("樣張", "")
+                    
+                    # Stop if we hit other keywords
+                    if any(k in next_l for k in ['出生', '年月日', '性別', '統一編號', '住址', '發證']):
+                        break
+                    
+                    # If line is short Chinese (likely name char)
+                    # e.g. "筱" or "玲" or "筱玲"
+                    if re.match(r'^[\u4e00-\u9fa5]{1,3}$', next_l):
+                        val += next_l
+            
             info['Name'] = val
             
-        # DOB
-        if "出生" in line:
-            # Try to grab date string even if spaced out
-            # Combine current line + next line to search for date pattern
-            context = line + (lines[i+1] if i+1 < len(lines) else "")
-            match = re.search(r'(\d{2,3})[\.年 ]*(\d{1,2})[\.月 ]*(\d{1,2})', context)
-            if match:
+        # DOB: Look for "出生" or "年月日"
+        if "出生" in txt or "年月日" in txt:
+            # Gather context from valid lines around it
+            context = ""
+            for j in range(3):
+                if i+j < len(clean_lines):
+                    context += clean_lines[i+j].replace(" ", "").replace("樣本", "").replace("樣張", "")
+            
+            # Regex for ROC date: 57年6月5日 or 57.6.5
+            match = re.search(r'(?:民國)?(\d{2,3})[年\./](\d{1,2})[月\./](\d{1,2})', context)
+            if match and 'Birthday' not in info:
                  info['Birthday'] = normalize_date_roc(f"{match.group(1)}年{match.group(2)}月{match.group(3)}")
 
-        # Address
-        if "住址" in line:
-            val = line.replace("住址", "").strip()
-            if len(val) < 3 and i+1 < len(lines): val += lines[i+1]
+        # Address: look for "住址"
+        if "住址" in txt:
+            val = txt.replace("住址", "")
+            # If empty or short, append next line (addresses are long)
+            if len(val) < 5 and i+1 < len(clean_lines):
+                val += clean_lines[i+1].replace(" ", "").replace("樣本", "").replace("樣張", "")
             info['Address'] = val
 
-        # ID Regex
-        id_match = re.search(r'[A-Z][12]\d{8}', cleaned)
+        # ID Regex (Unified ID)
+        id_match = re.search(r'[A-Z][12]\d{8}', txt)
         if id_match:
             uid = id_match.group(0)
             info['ID Number'] = uid
             if uid[1] == '1': info['Gender'] = '男性'
             elif uid[1] == '2': info['Gender'] = '女性'
 
-    # Fallback: If Name still missing, guess from top lines
-    if not info.get('Name'):
-        ignore = ['中華民國', '國民身分證', '身分證', '姓名', '樣本', '樣張']
-        for line in lines[:5]:
-            t = line.strip().replace(" ", "")
-            # Chinese Name pattern: 2-4 chars
-            if re.match(r'^[\u4e00-\u9fa5]{2,4}$', t) and t not in ignore:
-                info['Name'] = t
-                break
-                
     return info
 
 def parse_passport(lines):
