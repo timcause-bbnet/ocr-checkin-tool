@@ -193,7 +193,7 @@ def parse_taiwan_id(lines):
                     next_l = clean_lines[i+j].replace(" ", "").replace("樣本", "").replace("樣張", "")
                     
                     # Stop if we hit other keywords
-                    if any(k in next_l for k in ['出生', '年月日', '性別', '統一編號', '住址', '發證']):
+                    if any(k in next_l for k in ['出生', '年月日', '性別', '統一編號', '住址', '發證', '甲', '乙']):
                         break
                     
                     # If line is short Chinese (likely name char)
