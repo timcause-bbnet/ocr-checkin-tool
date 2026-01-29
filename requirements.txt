@@ -1,0 +1,7 @@
+streamlit
+rapidocr-onnxruntime
+opencv-python-headless
+pandas
+pillow
+numpy
+opencc-python-reimplemented
